@@ -1,8 +1,20 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { queryAll, queryOne, execute } = require('../database/init');
 const rules = require('../engine/rules');
 const commentary = require('../engine/commentary');
+
+// Scorer auth middleware
+function requireScorer(req, res, next) {
+    const match = queryOne('SELECT scorer_token FROM matches WHERE id = ?', [Number(req.params.id)]);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+    const token = req.headers['x-scorer-token'];
+    if (match.scorer_token && token !== match.scorer_token) {
+        return res.status(403).json({ error: 'Only the match scorer can perform this action' });
+    }
+    next();
+}
 
 // GET /api/matches
 router.get('/', (req, res) => {
@@ -17,17 +29,7 @@ router.get('/', (req, res) => {
         
         const enriched = matches.map(m => {
             const innings = queryAll('SELECT * FROM innings WHERE match_id = ? ORDER BY innings_number', [m.id]);
-            const teamAPlayers = queryAll(`
-                SELECT p.*, mp.batting_order, mp.team FROM match_players mp 
-                JOIN players p ON mp.player_id = p.id 
-                WHERE mp.match_id = ? AND mp.team = 'A'
-            `, [m.id]);
-            const teamBPlayers = queryAll(`
-                SELECT p.*, mp.batting_order, mp.team FROM match_players mp 
-                JOIN players p ON mp.player_id = p.id 
-                WHERE mp.match_id = ? AND mp.team = 'B'
-            `, [m.id]);
-            return { ...m, innings, teamAPlayers, teamBPlayers };
+            return { ...m, innings, scorer_token: undefined };
         });
         
         res.json(enriched);
@@ -45,16 +47,19 @@ router.post('/', (req, res) => {
             return res.status(400).json({ error: 'Both teams must have players' });
         }
 
+        const scorerToken = crypto.randomBytes(16).toString('hex');
+
         const result = execute(`
-            INSERT INTO matches (team_a_name, team_b_name, total_overs, toss_winner, toss_decision, venue, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'upcoming')
+            INSERT INTO matches (team_a_name, team_b_name, total_overs, toss_winner, toss_decision, venue, scorer_token, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'upcoming')
         `, [
             team_a_name || 'Team A',
             team_b_name || 'Team B',
-            total_overs || 5,
+            total_overs || 0,
             toss_winner || null,
             toss_decision || null,
-            venue || 'The Corridor'
+            venue || 'The Corridor',
+            scorerToken
         ]);
 
         const matchId = result.lastInsertRowid;
@@ -67,7 +72,8 @@ router.post('/', (req, res) => {
         });
 
         const match = queryOne('SELECT * FROM matches WHERE id = ?', [matchId]);
-        res.status(201).json(match);
+        // Return scorer_token to the creator only
+        res.status(201).json({ ...match, scorer_token: scorerToken });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -91,14 +97,15 @@ router.get('/:id', (req, res) => {
             WHERE mp.match_id = ? AND mp.team = 'B' ORDER BY mp.batting_order
         `, [match.id]);
 
-        res.json({ ...match, innings, teamAPlayers, teamBPlayers });
+        // Don't expose scorer_token in public GET
+        res.json({ ...match, scorer_token: undefined, innings, teamAPlayers, teamBPlayers });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // PUT /api/matches/:id/start
-router.put('/:id/start', (req, res) => {
+router.put('/:id/start', requireScorer, (req, res) => {
     try {
         const match = queryOne('SELECT * FROM matches WHERE id = ?', [Number(req.params.id)]);
         if (!match) return res.status(404).json({ error: 'Match not found' });
@@ -120,7 +127,7 @@ router.put('/:id/start', (req, res) => {
         const updated = queryOne('SELECT * FROM matches WHERE id = ?', [match.id]);
         const innings = queryAll('SELECT * FROM innings WHERE match_id = ?', [match.id]);
         
-        res.json({ ...updated, innings });
+        res.json({ ...updated, scorer_token: undefined, innings });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -198,10 +205,14 @@ router.get('/:id/scorecard', (req, res) => {
 
             // Fall of wickets
             const fow = queryAll(`
-                SELECT dm.id, p.name as batter_name, dm.dismissal_type, del.over_number, del.ball_number, del.id as del_id
+                SELECT dm.id, p.name as batter_name, dm.dismissal_type, 
+                       pf.name as fielder_name, pb.name as bowler_name,
+                       del.over_number, del.ball_number, del.id as del_id
                 FROM dismissals dm
                 JOIN deliveries del ON dm.delivery_id = del.id
                 JOIN players p ON dm.batter_id = p.id
+                LEFT JOIN players pf ON dm.fielder_id = pf.id
+                LEFT JOIN players pb ON dm.bowler_id = pb.id
                 WHERE dm.innings_id = ?
                 ORDER BY dm.id
             `, [inn.id]);
@@ -218,18 +229,7 @@ router.get('/:id/scorecard', (req, res) => {
             return { innings: inn, batters, bowlers, fallOfWickets: fow };
         });
 
-        const teamAPlayers = queryAll(`
-            SELECT p.*, mp.batting_order FROM match_players mp 
-            JOIN players p ON mp.player_id = p.id 
-            WHERE mp.match_id = ? AND mp.team = 'A' ORDER BY mp.batting_order
-        `, [match.id]);
-        const teamBPlayers = queryAll(`
-            SELECT p.*, mp.batting_order FROM match_players mp 
-            JOIN players p ON mp.player_id = p.id 
-            WHERE mp.match_id = ? AND mp.team = 'B' ORDER BY mp.batting_order
-        `, [match.id]);
-
-        res.json({ match, scorecard, teamAPlayers, teamBPlayers });
+        res.json({ match: { ...match, scorer_token: undefined }, scorecard });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -244,7 +244,7 @@ router.get('/:id/state', (req, res) => {
         const innings = queryAll('SELECT * FROM innings WHERE match_id = ? ORDER BY innings_number', [match.id]);
         const currentInnings = innings.find(i => !i.is_completed) || innings[innings.length - 1];
         
-        if (!currentInnings) return res.json({ match, innings: [], currentInnings: null, state: 'not_started' });
+        if (!currentInnings) return res.json({ match: { ...match, scorer_token: undefined }, innings: [], currentInnings: null, state: 'not_started' });
 
         const battingPlayers = queryAll(`
             SELECT p.*, mp.batting_order FROM match_players mp 
@@ -280,8 +280,14 @@ router.get('/:id/state', (req, res) => {
             ORDER BY d.id ASC
         `, [currentInnings.id, currentOverNum]);
 
+        // For unlimited overs, RRR is not applicable
+        const isUnlimited = match.total_overs === 0;
+        const totalBallsInMatch = isUnlimited ? 0 : match.total_overs * 6;
+        const ballsRemaining = isUnlimited ? null : totalBallsInMatch - currentInnings.total_balls;
+        const oversDisplay = isUnlimited ? `${rules.formatOvers(currentInnings.total_balls)} (∞)` : rules.formatOvers(currentInnings.total_balls);
+
         res.json({
-            match,
+            match: { ...match, scorer_token: undefined },
             innings,
             currentInnings,
             battingPlayers,
@@ -292,16 +298,17 @@ router.get('/:id/state', (req, res) => {
             target,
             currentOverBalls,
             currentRunRate: rules.calculateCRR(currentInnings.total_runs, currentInnings.total_balls),
-            requiredRunRate: target ? rules.calculateRRR(target, currentInnings.total_runs, (match.total_overs * 6) - currentInnings.total_balls) : null,
-            oversDisplay: rules.formatOvers(currentInnings.total_balls)
+            requiredRunRate: (target && !isUnlimited) ? rules.calculateRRR(target, currentInnings.total_runs, ballsRemaining) : null,
+            oversDisplay,
+            isUnlimited
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// POST /api/matches/:id/delivery
-router.post('/:id/delivery', (req, res) => {
+// POST /api/matches/:id/delivery — REQUIRES SCORER TOKEN
+router.post('/:id/delivery', requireScorer, (req, res) => {
     try {
         const match = queryOne('SELECT * FROM matches WHERE id = ?', [Number(req.params.id)]);
         if (!match) return res.status(404).json({ error: 'Match not found' });
@@ -311,10 +318,10 @@ router.post('/:id/delivery', (req, res) => {
         if (!currentInnings) return res.status(400).json({ error: 'No active innings' });
 
         const {
-            batter_id, bowler_id, non_striker_id,
+            batter_id, bowler_id,
             runs_scored = 0, is_wide = false, is_noball = false,
             is_bye = false, is_wicket = false, is_miss = false,
-            dismissal_type, fielder_id, swap_batters = false
+            dismissal_type, fielder_id
         } = req.body;
 
         if (!batter_id || !bowler_id) {
@@ -324,7 +331,8 @@ router.post('/:id/delivery', (req, res) => {
         const validatedRuns = rules.validateRuns(runs_scored);
         const isBoundary = validatedRuns === 2;
         const isLegal = !is_wide && !is_noball;
-        const extrasRuns = is_wide ? 1 : (is_noball ? 1 : 0);
+        // CORRIDOR RULE: No runs for wides/no balls — just re-bowl
+        const extrasRuns = 0;
 
         const legalBallsBefore = currentInnings.total_balls;
         const overNumber = Math.floor(legalBallsBefore / 6);
@@ -364,7 +372,7 @@ router.post('/:id/delivery', (req, res) => {
                 runs_scored, extras_runs, is_wide, is_noball, is_bye, is_wicket, is_miss, is_boundary, commentary
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            currentInnings.id, overNumber, ballInOver, bowler_id, batter_id, non_striker_id || null,
+            currentInnings.id, overNumber, ballInOver, bowler_id, batter_id, null,
             validatedRuns, extrasRuns, is_wide ? 1 : 0, is_noball ? 1 : 0, is_bye ? 1 : 0,
             actualWicket ? 1 : 0, is_miss ? 1 : 0, isBoundary ? 1 : 0, commentaryText
         ]);
@@ -436,7 +444,7 @@ router.post('/:id/delivery', (req, res) => {
                 dismissal_type: actualDismissalType || null,
                 miss_count: missCount
             },
-            match: updatedMatch,
+            match: { ...updatedMatch, scorer_token: undefined },
             innings: updatedAllInnings,
             currentInnings: activeInnings,
             inningsComplete,
@@ -454,8 +462,8 @@ router.post('/:id/delivery', (req, res) => {
     }
 });
 
-// POST /api/matches/:id/undo
-router.post('/:id/undo', (req, res) => {
+// POST /api/matches/:id/undo — REQUIRES SCORER TOKEN
+router.post('/:id/undo', requireScorer, (req, res) => {
     try {
         const match = queryOne('SELECT * FROM matches WHERE id = ?', [Number(req.params.id)]);
         if (!match) return res.status(404).json({ error: 'Match not found' });
@@ -568,28 +576,27 @@ router.get('/:id/graph-data', (req, res) => {
                 }
             });
 
-            // Partnerships
+            // Partnerships (solo batter in corridor cricket)
             const partnerships = [];
-            let pRuns = 0, pBalls = 0, p1 = null, p2 = null;
+            let pRuns = 0, pBalls = 0, p1 = null;
             const allDels = queryAll(`
-                SELECT d.*, p.name as batter_name, p2.name as non_striker_name
+                SELECT d.*, p.name as batter_name
                 FROM deliveries d 
                 JOIN players p ON d.batter_id = p.id
-                LEFT JOIN players p2 ON d.non_striker_id = p2.id
                 WHERE d.innings_id = ? ORDER BY d.id
             `, [inn.id]);
 
             allDels.forEach(d => {
-                if (!p1) { p1 = d.batter_name; p2 = d.non_striker_name; }
+                if (!p1) { p1 = d.batter_name; }
                 pRuns += d.runs_scored;
                 pBalls++;
                 if (d.is_wicket) {
-                    partnerships.push({ batter1: p1, batter2: p2 || 'Unknown', runs: pRuns, balls: pBalls });
-                    pRuns = 0; pBalls = 0; p1 = null; p2 = null;
+                    partnerships.push({ batter1: p1, batter2: '-', runs: pRuns, balls: pBalls });
+                    pRuns = 0; pBalls = 0; p1 = null;
                 }
             });
             if (pRuns > 0 || pBalls > 0) {
-                partnerships.push({ batter1: p1 || 'Unknown', batter2: p2 || 'Unknown', runs: pRuns, balls: pBalls, current: true });
+                partnerships.push({ batter1: p1 || 'Unknown', batter2: '-', runs: pRuns, balls: pBalls, current: true });
             }
 
             const teamName = inn.batting_team === 'A' ? match.team_a_name : match.team_b_name;
@@ -602,8 +609,8 @@ router.get('/:id/graph-data', (req, res) => {
     }
 });
 
-// PUT /api/matches/:id/complete
-router.put('/:id/complete', (req, res) => {
+// PUT /api/matches/:id/complete — REQUIRES SCORER TOKEN
+router.put('/:id/complete', requireScorer, (req, res) => {
     try {
         const { result } = req.body;
         execute("UPDATE matches SET status = 'completed', result = ?, completed_at = datetime('now') WHERE id = ?",
@@ -618,8 +625,8 @@ router.put('/:id/complete', (req, res) => {
     }
 });
 
-// PUT /api/matches/:id/end-innings
-router.put('/:id/end-innings', (req, res) => {
+// PUT /api/matches/:id/end-innings — REQUIRES SCORER TOKEN
+router.put('/:id/end-innings', requireScorer, (req, res) => {
     try {
         const match = queryOne('SELECT * FROM matches WHERE id = ?', [Number(req.params.id)]);
         const currentInnings = queryOne("SELECT * FROM innings WHERE match_id = ? AND is_completed = 0 ORDER BY innings_number LIMIT 1", [match.id]);
@@ -643,6 +650,18 @@ router.put('/:id/end-innings', (req, res) => {
             if (io) io.to(`match-${match.id}`).emit('match-complete', { matchId: match.id, result });
             res.json({ success: true, message: result });
         }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/matches/:id/check-scorer — Check if current user is the scorer
+router.get('/:id/check-scorer', (req, res) => {
+    try {
+        const match = queryOne('SELECT scorer_token FROM matches WHERE id = ?', [Number(req.params.id)]);
+        if (!match) return res.status(404).json({ error: 'Match not found' });
+        const token = req.headers['x-scorer-token'];
+        res.json({ isScorer: !match.scorer_token || token === match.scorer_token });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -197,8 +197,19 @@ async function createMatch() {
             venue
         });
 
-        // Start the match immediately
-        await apiPut(`/api/matches/${match.id}/start`);
+        // Store scorer token — only this browser can score
+        if (match.scorer_token) {
+            localStorage.setItem(`scorer-token-${match.id}`, match.scorer_token);
+        }
+
+        // Start the match using the scorer token
+        await fetch(`/api/matches/${match.id}/start`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Scorer-Token': match.scorer_token || ''
+            }
+        });
         
         showToast('Match created & started! 🏏', 'success');
         window.location.href = `/scoring?id=${match.id}`;

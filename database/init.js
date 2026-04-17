@@ -32,6 +32,18 @@ async function initDb() {
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
     db.run(schema);
 
+    // Migration: add scorer_token if missing
+    try {
+        const cols = db.exec('PRAGMA table_info(matches)');
+        if (cols.length > 0) {
+            const colNames = cols[0].values.map(r => r[1]);
+            if (!colNames.includes('scorer_token')) {
+                db.run('ALTER TABLE matches ADD COLUMN scorer_token TEXT');
+                console.log('✅ Migration: added scorer_token column');
+            }
+        }
+    } catch(e) { /* column already exists */ }
+
     // Save to disk
     saveDb();
 

@@ -55,11 +55,11 @@ router.get('/leaderboard', (req, res) => {
         // Purple Cap
         const purpleCap = [...playerStats].filter(p => p.wickets > 0).sort((a, b) => b.wickets - a.wickets || a.runs_conceded - b.runs_conceded).slice(0, 10);
         
-        // Best strike rates (min 10 balls)
-        const bestStrikeRates = [...playerStats].filter(p => p.balls_faced >= 10).sort((a, b) => parseFloat(b.strike_rate) - parseFloat(a.strike_rate)).slice(0, 10);
+        // Best strike rates (min 3 balls — corridor matches are short)
+        const bestStrikeRates = [...playerStats].filter(p => p.balls_faced >= 3).sort((a, b) => parseFloat(b.strike_rate) - parseFloat(a.strike_rate)).slice(0, 10);
         
-        // Best economy (min 6 balls)
-        const bestEconomy = [...playerStats].filter(p => p.legal_balls >= 6).sort((a, b) => parseFloat(a.economy) - parseFloat(b.economy)).slice(0, 10);
+        // Best economy (min 3 balls)
+        const bestEconomy = [...playerStats].filter(p => p.legal_balls >= 3).sort((a, b) => parseFloat(a.economy) - parseFloat(b.economy)).slice(0, 10);
         
         // Most catches
         const mostCatches = [...playerStats].filter(p => p.catches > 0).sort((a, b) => b.catches - a.catches).slice(0, 10);

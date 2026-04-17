@@ -84,6 +84,7 @@ async function checkLiveMatch() {
             document.getElementById('live-venue').textContent = m.venue || 'The Corridor';
             document.getElementById('live-score-display').innerHTML = buildScoreDisplay(m, m.innings || []);
             document.getElementById('live-watch-btn').href = `/match?id=${m.id}`;
+            document.getElementById('live-watch-btn').textContent = '👁️ Spectate Live →';
             document.getElementById('live-score-btn').href = `/scoring?id=${m.id}`;
 
             // Socket.io for live updates

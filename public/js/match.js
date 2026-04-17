@@ -48,11 +48,12 @@ async function loadMatch() {
             if (currentInn.innings_number === 2) {
                 const target = innings[0].total_runs + 1;
                 const needed = target - currentInn.total_runs;
-                const ballsLeft = (match.total_overs * 6) - currentInn.total_balls;
+                const isUnlimited = match.total_overs === 0;
+                const ballsLeft = isUnlimited ? '∞' : ((match.total_overs * 6) - currentInn.total_balls);
                 const targetEl = document.getElementById('match-target-info');
                 targetEl.classList.remove('hidden');
                 if (needed > 0 && match.status === 'live') {
-                    targetEl.textContent = `Target: ${target} | Need ${needed} from ${ballsLeft} balls`;
+                    targetEl.textContent = `Target: ${target} | Need ${needed}${isUnlimited ? '' : ` from ${ballsLeft} balls`}`;
                 } else if (match.status === 'completed') {
                     targetEl.textContent = `Target was ${target}`;
                 }
@@ -111,18 +112,12 @@ function renderCurrentBatters(state) {
         return;
     }
 
+    // Corridor cricket: only one batter at crease
     const strikerId = state.lastDelivery.batter_id;
-    const nonStrikerId = state.lastDelivery.non_striker_id;
-
-    // Build stats from scorecard
     const batters = [];
     if (strikerId) {
         const p = state.battingPlayers.find(pl => pl.id === strikerId);
         if (p) batters.push({ ...p, isStriker: true });
-    }
-    if (nonStrikerId) {
-        const p = state.battingPlayers.find(pl => pl.id === nonStrikerId);
-        if (p) batters.push({ ...p, isStriker: false });
     }
 
     container.innerHTML = batters.map(b => {
@@ -132,7 +127,7 @@ function renderCurrentBatters(state) {
             <div class="player-card-inline mb-sm">
                 ${buildAvatar(b.name, b.avatar_color)}
                 <div>
-                    <div class="player-name ${b.isStriker ? 'on-strike' : ''}">${b.name}</div>
+                    <div class="player-name on-strike">${b.name} *</div>
                     <div class="player-stats">At crease ${misses > 0 ? `• ${misses}/3 misses` : ''}</div>
                     ${misses > 0 ? `<div class="miss-dots">${[0,1,2].map(i => `<div class="miss-dot ${i < misses ? 'active' : ''}"></div>`).join('')}</div>` : ''}
                 </div>
@@ -375,7 +370,7 @@ function renderPartnerships(data) {
             const width = Math.max((p.runs / maxRuns) * 100, 8);
             return `
                 <div class="partnership-bar">
-                    <div class="partnership-label">${p.batter1} & ${p.batter2}</div>
+                    <div class="partnership-label">${p.batter1}</div>
                     <div class="partnership-fill" style="width: ${width}%">${p.runs}</div>
                     <span class="text-sm text-muted">(${p.balls}b)${p.current ? ' *' : ''}</span>
                 </div>

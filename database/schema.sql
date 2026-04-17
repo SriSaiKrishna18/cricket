@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS matches (
     status TEXT DEFAULT 'upcoming' CHECK(status IN ('upcoming', 'live', 'completed', 'abandoned')),
     result TEXT,
     venue TEXT DEFAULT 'The Corridor',
+    scorer_token TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     started_at DATETIME,
     completed_at DATETIME

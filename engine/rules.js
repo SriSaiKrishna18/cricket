@@ -49,14 +49,16 @@ function formatOvers(totalLegalBalls) {
  * Check if innings is complete
  */
 function isInningsComplete(innings, matchOvers, teamPlayerCount) {
-    const totalBalls = matchOvers * 6;
     const maxWickets = Math.max(teamPlayerCount - 1, 1);
-    
-    // All overs bowled
-    if (innings.total_balls >= totalBalls) return true;
     
     // All out
     if (innings.total_wickets >= maxWickets) return true;
+    
+    // All overs bowled (0 = unlimited, never complete by overs)
+    if (matchOvers > 0) {
+        const totalBalls = matchOvers * 6;
+        if (innings.total_balls >= totalBalls) return true;
+    }
     
     return false;
 }

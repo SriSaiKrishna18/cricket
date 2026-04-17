@@ -24,35 +24,37 @@
     <main class="main-content page-enter">
         <div id="scoring-loading" class="loading-spinner"><div class="spinner"></div></div>
 
+        <!-- Not authorized -->
+        <div id="not-authorized" class="hidden text-center" style="padding: var(--space-3xl);">
+            <h2>🔒 Scorer Only</h2>
+            <p class="text-muted mb-lg">Only the person who created this match can score it.</p>
+            <a href="#" id="spectate-instead" class="btn btn-primary">👁️ Watch Live Instead</a>
+            <a href="/" class="btn btn-secondary" style="margin-left: 8px;">Home</a>
+        </div>
+
         <div id="scoring-content" class="hidden">
             <!-- Match Score Bar -->
             <div class="live-card mb-lg">
                 <div class="flex items-center justify-between mb-sm">
                     <span class="live-badge">SCORING</span>
-                    <a href="#" id="watch-link" class="btn btn-sm btn-secondary">Watch Live →</a>
+                    <a href="#" id="watch-link" class="btn btn-sm btn-secondary">👁️ Spectate →</a>
                 </div>
                 <div class="score-display" id="scoring-score-display"></div>
                 <div id="scoring-target" class="text-center text-sm text-muted hidden"></div>
             </div>
 
-            <!-- Current Players Selection -->
+            <!-- Current Players Selection — SINGLE BATTER (corridor cricket) -->
             <div class="grid grid-2 mb-lg">
                 <div class="card">
-                    <h4 class="mb-sm">🏏 Striker</h4>
+                    <h4 class="mb-sm">🏏 Batter</h4>
                     <select id="striker-select" class="form-control mb-sm"></select>
                     <div id="striker-stats" class="text-sm text-muted"></div>
                     <div id="striker-misses" class="miss-dots mt-sm"></div>
                 </div>
                 <div class="card">
-                    <h4 class="mb-sm">🏏 Non-Striker</h4>
-                    <select id="non-striker-select" class="form-control mb-sm"></select>
-                    <div id="non-striker-stats" class="text-sm text-muted"></div>
+                    <h4 class="mb-sm">🎯 Bowler</h4>
+                    <select id="bowler-select" class="form-control"></select>
                 </div>
-            </div>
-
-            <div class="card mb-lg">
-                <h4 class="mb-sm">🎯 Bowler</h4>
-                <select id="bowler-select" class="form-control"></select>
             </div>
 
             <!-- This Over Display -->
@@ -76,11 +78,11 @@
                     <button class="score-btn btn-noball" onclick="recordExtra('noball')">No Ball</button>
                     <button class="score-btn btn-wicket" onclick="showWicketModal()">🔴 WICKET</button>
                 </div>
+                <p class="text-sm text-muted mt-sm">Wides & No Balls: no runs added, ball re-bowled</p>
             </div>
 
             <!-- Actions -->
             <div class="flex gap-sm flex-wrap mb-lg">
-                <button class="btn btn-secondary" onclick="swapBatters()">🔄 Swap Batters</button>
                 <button class="btn btn-secondary" onclick="undoDelivery()">↩️ Undo Last Ball</button>
                 <button class="btn btn-danger" onclick="confirmEndInnings()">End Innings</button>
                 <button class="btn btn-danger" onclick="confirmEndMatch()">End Match</button>
@@ -145,21 +147,6 @@
                 </select>
             </div>
             <button class="btn btn-danger btn-block" onclick="confirmWicket()">Confirm Wicket</button>
-        </div>
-    </div>
-
-    <!-- New Batter Modal -->
-    <div class="modal-overlay" id="new-batter-modal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>New Batter</h3>
-                <button class="modal-close" onclick="closeModal('new-batter-modal')">&times;</button>
-            </div>
-            <div class="form-group">
-                <label for="new-batter-select">Select next batter</label>
-                <select id="new-batter-select" class="form-control"></select>
-            </div>
-            <button class="btn btn-primary btn-block" onclick="confirmNewBatter()">Send to Crease</button>
         </div>
     </div>
 

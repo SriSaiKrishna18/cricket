@@ -181,17 +181,19 @@ function buildLeaderboardItem(player, rank, statValue, statLabel) {
     `;
 }
 
-// ── Dismissal Text ──
+// ── Dismissal Text (shows catcher/fielder name) ──
 function getDismissalText(dismissal) {
     if (!dismissal) return 'not out';
+    const fielder = dismissal.fielder_name || '';
+    const bowler = dismissal.bowler_name || '?';
     const types = {
-        bowled: `b ${dismissal.bowler_name}`,
-        caught_one_hand: `c ${dismissal.fielder_name || '?'} b ${dismissal.bowler_name}`,
-        run_out: `run out (${dismissal.fielder_name || 'direct'})`,
-        stumped: `st b ${dismissal.bowler_name}`,
-        lbw: `lbw b ${dismissal.bowler_name}`,
+        bowled: `b ${bowler}`,
+        caught_one_hand: fielder ? `c ${fielder} b ${bowler}` : `c & b ${bowler}`,
+        run_out: `run out${fielder ? ` (${fielder})` : ''}`,
+        stumped: `st b ${bowler}`,
+        lbw: `lbw b ${bowler}`,
         hit_wicket: 'hit wicket',
-        three_misses: '3 misses',
+        three_misses: '3 misses ✕✕✕',
         retired: 'retired'
     };
     return types[dismissal.dismissal_type] || dismissal.dismissal_type;
@@ -205,9 +207,8 @@ function buildMatchCard(match) {
     const innings = match.innings || [];
     const scoreHtml = buildScoreDisplay(match, innings);
     
-    let link = match.status === 'live' ? `/match?id=${match.id}` : 
-               match.status === 'completed' ? `/match?id=${match.id}` : 
-               `/scoring?id=${match.id}`;
+    let link = `/match?id=${match.id}`;
+    const spectateBtn = match.status === 'live' ? `<a href="/match?id=${match.id}" class="btn btn-sm" style="margin-top: 8px;" onclick="event.stopPropagation();">👁️ Spectate Live</a>` : '';
 
     return `
         <div class="match-card" onclick="window.location='${link}'">
@@ -217,6 +218,7 @@ function buildMatchCard(match) {
             </div>
             <div class="score-display" style="padding: var(--space-sm) 0;">${scoreHtml}</div>
             ${match.result ? `<div class="match-result">${match.result}</div>` : ''}
+            ${spectateBtn}
         </div>
     `;
 }
