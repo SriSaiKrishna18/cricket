@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Player statistics and head-to-head comparisons">
+    <title>Player Stats — Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><span class="brand-icon">🏏</span><span>Corridor Cricket</span></a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="/new-match">New Match</a></li>
+            <li><a href="/history">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats" class="active">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <div class="page-header">
+            <h1>📊 Player Stats</h1>
+            <p>Detailed performance analysis for every player</p>
+        </div>
+
+        <!-- Player Selector -->
+        <div class="card mb-lg">
+            <div class="form-group">
+                <label for="player-select">Select Player</label>
+                <select id="player-select" class="form-control" onchange="loadPlayerStats()">
+                    <option value="">Choose a player...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Player Stats Display -->
+        <div id="player-stats-content" class="hidden">
+            <!-- Player Header -->
+            <div class="card mb-lg" style="text-align: center;">
+                <div class="player-avatar player-avatar-lg" id="stats-avatar" style="margin: 0 auto var(--space-md);"></div>
+                <h2 id="stats-player-name"></h2>
+                <p class="text-muted" id="stats-matches-played"></p>
+            </div>
+
+            <!-- Batting Stats -->
+            <div class="card mb-lg">
+                <h3 class="mb-md">🏏 Batting</h3>
+                <div class="grid grid-4">
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-runs">0</div>
+                        <div class="stat-label">Runs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-avg">0</div>
+                        <div class="stat-label">Average</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-sr">0</div>
+                        <div class="stat-label">Strike Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-hs">0</div>
+                        <div class="stat-label">Highest Score</div>
+                    </div>
+                </div>
+                <div class="grid grid-4 mt-md">
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-innings">0</div>
+                        <div class="stat-label">Innings</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-no">0</div>
+                        <div class="stat-label">Not Outs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-boundaries">0</div>
+                        <div class="stat-label">Boundaries</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bat-balls">0</div>
+                        <div class="stat-label">Balls Faced</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bowling Stats -->
+            <div class="card mb-lg">
+                <h3 class="mb-md">🎯 Bowling</h3>
+                <div class="grid grid-4">
+                    <div class="stat-card">
+                        <div class="stat-value" id="bowl-wickets">0</div>
+                        <div class="stat-label">Wickets</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bowl-avg">-</div>
+                        <div class="stat-label">Average</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bowl-econ">0</div>
+                        <div class="stat-label">Economy</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="bowl-best">-</div>
+                        <div class="stat-label">Best Figures</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fielding -->
+            <div class="card mb-lg">
+                <h3 class="mb-md">🧤 Fielding</h3>
+                <div class="stat-card" style="max-width: 200px;">
+                    <div class="stat-value" id="field-catches">0</div>
+                    <div class="stat-label">Catches</div>
+                </div>
+            </div>
+
+            <!-- Recent Form -->
+            <div class="card mb-lg">
+                <h3 class="mb-md">📈 Recent Form</h3>
+                <div class="chart-container" style="height: 200px;">
+                    <canvas id="form-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Head to Head -->
+        <div class="card mt-xl">
+            <h3 class="mb-md">⚔️ Head-to-Head</h3>
+            <div class="grid grid-2 mb-md">
+                <div class="form-group">
+                    <label for="h2h-player1">Player 1</label>
+                    <select id="h2h-player1" class="form-control">
+                        <option value="">Select player</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="h2h-player2">Player 2</label>
+                    <select id="h2h-player2" class="form-control">
+                        <option value="">Select player</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="loadHeadToHead()">Compare</button>
+            <div id="h2h-result" class="hidden mt-lg"></div>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/stats.js"></script>
+</body>
+</html>

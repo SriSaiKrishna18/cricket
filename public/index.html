@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Corridor Cricket — Live scoring, stats, and leaderboards for your corridor cricket matches">
+    <title>Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <span class="brand-icon">🏏</span>
+            <span>Corridor Cricket</span>
+        </a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/" class="active">Home</a></li>
+            <li><a href="/new-match">New Match</a></li>
+            <li><a href="/history">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <!-- Live Match Banner -->
+        <div id="live-banner" class="hidden" style="margin-bottom: var(--space-xl);">
+            <div class="live-card" id="live-match-card">
+                <div class="flex items-center justify-between mb-md">
+                    <span class="live-badge">LIVE</span>
+                    <span class="text-sm text-muted" id="live-venue"></span>
+                </div>
+                <div class="score-display" id="live-score-display"></div>
+                <div style="text-align: center; margin-top: var(--space-md);">
+                    <a href="#" id="live-watch-btn" class="btn btn-primary">Watch Live →</a>
+                    <a href="#" id="live-score-btn" class="btn btn-secondary" style="margin-left: 8px;">Score Match</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hero Section -->
+        <div class="page-header" style="text-align: center; padding: var(--space-xl) 0;">
+            <h1>Corridor Cricket</h1>
+            <p style="max-width: 500px; margin: var(--space-sm) auto 0;">
+                Score matches, track stats, and settle the debate — who's really the best in the corridor?
+            </p>
+            <div style="margin-top: var(--space-xl); display: flex; gap: var(--space-md); justify-content: center; flex-wrap: wrap;">
+                <a href="/new-match" class="btn btn-primary btn-lg">🏏 Start New Match</a>
+                <a href="/leaderboard" class="btn btn-secondary btn-lg">🏆 Leaderboard</a>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-4" id="quick-stats" style="margin-bottom: var(--space-2xl);">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-matches">0</div>
+                <div class="stat-label">Matches Played</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-players">0</div>
+                <div class="stat-label">Players</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-runs">0</div>
+                <div class="stat-label">Total Runs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-wickets">0</div>
+                <div class="stat-label">Total Wickets</div>
+            </div>
+        </div>
+
+        <!-- Top Performers -->
+        <div class="grid grid-2" style="margin-bottom: var(--space-2xl);">
+            <div class="card" id="top-scorer-card">
+                <h3>🧡 Orange Cap</h3>
+                <p class="text-sm text-muted mb-md">Most runs</p>
+                <div id="top-scorer" class="empty-state" style="padding: var(--space-lg);">
+                    <p class="text-muted">Play some matches first!</p>
+                </div>
+            </div>
+            <div class="card" id="top-bowler-card">
+                <h3>💜 Purple Cap</h3>
+                <p class="text-sm text-muted mb-md">Most wickets</p>
+                <div id="top-bowler" class="empty-state" style="padding: var(--space-lg);">
+                    <p class="text-muted">Play some matches first!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Matches -->
+        <div style="margin-bottom: var(--space-2xl);">
+            <div class="flex items-center justify-between mb-lg">
+                <h2>Recent Matches</h2>
+                <a href="/history" class="btn btn-secondary btn-sm">View All →</a>
+            </div>
+            <div id="recent-matches" class="grid grid-2">
+                <div class="empty-state" style="grid-column: span 2;">
+                    <div class="icon">🏏</div>
+                    <h3>No matches yet</h3>
+                    <p>Start your first match to see it here!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Management -->
+        <div class="card" style="margin-bottom: var(--space-2xl);">
+            <div class="flex items-center justify-between mb-lg">
+                <div>
+                    <h3>Players</h3>
+                    <p class="text-sm text-muted">Manage your squad</p>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="showAddPlayerModal()">+ Add Player</button>
+            </div>
+            <div id="players-list" class="flex flex-wrap gap-sm">
+                <div class="loading-spinner"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Player Modal -->
+    <div class="modal-overlay" id="add-player-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add New Player</h3>
+                <button class="modal-close" onclick="closeModal('add-player-modal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="player-name-input">Player Name</label>
+                <input type="text" id="player-name-input" class="form-control" placeholder="Enter player name" maxlength="30">
+            </div>
+            <button class="btn btn-primary btn-block" id="add-player-btn" onclick="addPlayer()">Add Player</button>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

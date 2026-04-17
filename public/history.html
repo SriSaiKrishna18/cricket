@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Match history for corridor cricket">
+    <title>Match History — Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><span class="brand-icon">🏏</span><span>Corridor Cricket</span></a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="/new-match">New Match</a></li>
+            <li><a href="/history" class="active">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <div class="page-header">
+            <h1>📜 Match History</h1>
+            <p>Every match, every story</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="flex gap-sm mb-lg flex-wrap">
+            <button class="btn btn-secondary btn-sm filter-btn active" data-filter="all" onclick="filterMatches('all', this)">All</button>
+            <button class="btn btn-secondary btn-sm filter-btn" data-filter="live" onclick="filterMatches('live', this)">🔴 Live</button>
+            <button class="btn btn-secondary btn-sm filter-btn" data-filter="completed" onclick="filterMatches('completed', this)">✅ Completed</button>
+            <button class="btn btn-secondary btn-sm filter-btn" data-filter="upcoming" onclick="filterMatches('upcoming', this)">📅 Upcoming</button>
+        </div>
+
+        <!-- Match List -->
+        <div id="matches-list" class="grid grid-2">
+            <div class="loading-spinner" style="grid-column: span 2;"><div class="spinner"></div></div>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/history.js"></script>
+</body>
+</html>

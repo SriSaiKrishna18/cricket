@@ -1,0 +1,19 @@
+{
+  "name": "corridor-cricket",
+  "version": "1.0.0",
+  "description": "Live corridor cricket scoring platform — track, score, and spectate matches in real-time",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["cricket", "scoring", "live", "corridor"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "sql.js": "^1.11.0",
+    "socket.io": "^4.8.0",
+    "cors": "^2.8.5"
+  }
+}

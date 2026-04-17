@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Live match scorecard and commentary">
+    <title>Live Match — Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><span class="brand-icon">🏏</span><span>Corridor Cricket</span></a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="/new-match">New Match</a></li>
+            <li><a href="/history">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <div id="match-loading" class="loading-spinner"><div class="spinner"></div></div>
+
+        <div id="match-content" class="hidden">
+            <!-- Match Header -->
+            <div class="live-card mb-lg">
+                <div class="flex items-center justify-between mb-sm">
+                    <span id="match-badge" class="live-badge">LIVE</span>
+                    <span class="text-sm text-muted" id="match-venue"></span>
+                </div>
+                <div class="score-display" id="match-score-display"></div>
+                <div id="match-target-info" class="text-center text-sm text-muted hidden"></div>
+                <div id="match-result-display" class="text-center mt-md hidden" style="font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; color: var(--accent-primary);"></div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs" id="match-tabs">
+                <button class="tab-btn active" data-tab="tab-live">Live</button>
+                <button class="tab-btn" data-tab="tab-scorecard">Scorecard</button>
+                <button class="tab-btn" data-tab="tab-commentary">Commentary</button>
+                <button class="tab-btn" data-tab="tab-graphs">Graphs</button>
+            </div>
+
+            <!-- Live Tab -->
+            <div class="tab-content active" id="tab-live">
+                <div class="grid grid-2">
+                    <!-- Current Batters -->
+                    <div class="card">
+                        <h4 class="mb-md">🏏 Batting</h4>
+                        <div id="current-batters"></div>
+                    </div>
+                    <!-- Current Bowler -->
+                    <div class="card">
+                        <h4 class="mb-md">🎯 Bowling</h4>
+                        <div id="current-bowler"></div>
+                    </div>
+                </div>
+
+                <!-- This Over -->
+                <div class="card mt-lg">
+                    <h4 class="mb-sm">This Over</h4>
+                    <div class="over-timeline" id="this-over-timeline"></div>
+                </div>
+
+                <!-- Rate Info -->
+                <div class="grid grid-2 mt-lg" id="rate-cards">
+                    <div class="stat-card">
+                        <div class="stat-value" id="crr-display">0.00</div>
+                        <div class="stat-label">Current Run Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="rrr-display">—</div>
+                        <div class="stat-label">Required Run Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scorecard Tab -->
+            <div class="tab-content" id="tab-scorecard">
+                <div id="scorecard-content">
+                    <div class="loading-spinner"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Commentary Tab -->
+            <div class="tab-content" id="tab-commentary">
+                <div class="card">
+                    <h4 class="mb-md">Ball-by-Ball</h4>
+                    <div class="commentary-feed" id="commentary-feed">
+                        <div class="empty-state"><p class="text-muted">No deliveries yet</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graphs Tab -->
+            <div class="tab-content" id="tab-graphs">
+                <div class="grid grid-2">
+                    <div class="card">
+                        <h4 class="mb-md">📊 Manhattan (Runs per Over)</h4>
+                        <div class="chart-container">
+                            <canvas id="manhattan-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h4 class="mb-md">📈 Run Rate Progression</h4>
+                        <div class="chart-container">
+                            <canvas id="runrate-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card mt-lg">
+                    <h4 class="mb-md">🤝 Partnerships</h4>
+                    <div id="partnerships-display"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/match.js"></script>
+</body>
+</html>

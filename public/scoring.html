@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Score a live corridor cricket match">
+    <title>Scoring — Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><span class="brand-icon">🏏</span><span>Corridor Cricket</span></a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="/new-match">New Match</a></li>
+            <li><a href="/history">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <div id="scoring-loading" class="loading-spinner"><div class="spinner"></div></div>
+
+        <div id="scoring-content" class="hidden">
+            <!-- Match Score Bar -->
+            <div class="live-card mb-lg">
+                <div class="flex items-center justify-between mb-sm">
+                    <span class="live-badge">SCORING</span>
+                    <a href="#" id="watch-link" class="btn btn-sm btn-secondary">Watch Live →</a>
+                </div>
+                <div class="score-display" id="scoring-score-display"></div>
+                <div id="scoring-target" class="text-center text-sm text-muted hidden"></div>
+            </div>
+
+            <!-- Current Players Selection -->
+            <div class="grid grid-2 mb-lg">
+                <div class="card">
+                    <h4 class="mb-sm">🏏 Striker</h4>
+                    <select id="striker-select" class="form-control mb-sm"></select>
+                    <div id="striker-stats" class="text-sm text-muted"></div>
+                    <div id="striker-misses" class="miss-dots mt-sm"></div>
+                </div>
+                <div class="card">
+                    <h4 class="mb-sm">🏏 Non-Striker</h4>
+                    <select id="non-striker-select" class="form-control mb-sm"></select>
+                    <div id="non-striker-stats" class="text-sm text-muted"></div>
+                </div>
+            </div>
+
+            <div class="card mb-lg">
+                <h4 class="mb-sm">🎯 Bowler</h4>
+                <select id="bowler-select" class="form-control"></select>
+            </div>
+
+            <!-- This Over Display -->
+            <div class="card mb-lg">
+                <div class="flex items-center justify-between mb-sm">
+                    <h4>This Over</h4>
+                    <span class="text-sm text-muted" id="over-count"></span>
+                </div>
+                <div class="over-timeline" id="scoring-over-timeline"></div>
+            </div>
+
+            <!-- Scoring Buttons -->
+            <div class="card mb-lg">
+                <h4 class="mb-md">Record Delivery</h4>
+                <div class="scoring-grid">
+                    <button class="score-btn btn-runs-0" onclick="recordDelivery(0)">0</button>
+                    <button class="score-btn btn-runs-1" onclick="recordDelivery(1)">1</button>
+                    <button class="score-btn btn-runs-2" onclick="recordDelivery(2)">2 🔥</button>
+                    <button class="score-btn btn-miss" onclick="recordMiss()">Miss ✕</button>
+                    <button class="score-btn btn-wide" onclick="recordExtra('wide')">Wide</button>
+                    <button class="score-btn btn-noball" onclick="recordExtra('noball')">No Ball</button>
+                    <button class="score-btn btn-wicket" onclick="showWicketModal()">🔴 WICKET</button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-sm flex-wrap mb-lg">
+                <button class="btn btn-secondary" onclick="swapBatters()">🔄 Swap Batters</button>
+                <button class="btn btn-secondary" onclick="undoDelivery()">↩️ Undo Last Ball</button>
+                <button class="btn btn-danger" onclick="confirmEndInnings()">End Innings</button>
+                <button class="btn btn-danger" onclick="confirmEndMatch()">End Match</button>
+            </div>
+
+            <!-- Last Ball Commentary -->
+            <div class="card" id="last-ball-card" style="display: none;">
+                <h4 class="mb-sm">Last Ball</h4>
+                <p id="last-ball-commentary" class="text-secondary"></p>
+            </div>
+        </div>
+
+        <!-- Match Not Started -->
+        <div id="match-not-started" class="hidden text-center" style="padding: var(--space-3xl);">
+            <h2>Match Not Started</h2>
+            <p class="text-muted mb-lg">This match hasn't been started yet.</p>
+            <button class="btn btn-primary btn-lg" onclick="startMatch()">▶️ Start Match</button>
+        </div>
+
+        <!-- Match Completed -->
+        <div id="match-completed" class="hidden text-center" style="padding: var(--space-3xl);">
+            <h2>🏆 Match Completed</h2>
+            <p class="text-lg mt-md" id="completed-result"></p>
+            <div class="mt-lg">
+                <a href="#" id="view-scorecard-link" class="btn btn-primary">View Full Scorecard</a>
+                <a href="/" class="btn btn-secondary" style="margin-left: 8px;">Home</a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Wicket Modal -->
+    <div class="modal-overlay" id="wicket-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔴 Wicket!</h3>
+                <button class="modal-close" onclick="closeModal('wicket-modal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="dismissal-type">Dismissal Type</label>
+                <select id="dismissal-type" class="form-control">
+                    <option value="bowled">Bowled</option>
+                    <option value="caught_one_hand">Caught (One-hand, One-step)</option>
+                    <option value="run_out">Run Out</option>
+                    <option value="stumped">Stumped</option>
+                    <option value="lbw">LBW</option>
+                    <option value="hit_wicket">Hit Wicket</option>
+                    <option value="retired">Retired</option>
+                </select>
+            </div>
+            <div class="form-group" id="fielder-group">
+                <label for="fielder-select">Fielder / Catcher</label>
+                <select id="fielder-select" class="form-control">
+                    <option value="">Select fielder (optional)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="wicket-runs">Runs scored on this ball</label>
+                <select id="wicket-runs" class="form-control">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                </select>
+            </div>
+            <button class="btn btn-danger btn-block" onclick="confirmWicket()">Confirm Wicket</button>
+        </div>
+    </div>
+
+    <!-- New Batter Modal -->
+    <div class="modal-overlay" id="new-batter-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>New Batter</h3>
+                <button class="modal-close" onclick="closeModal('new-batter-modal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="new-batter-select">Select next batter</label>
+                <select id="new-batter-select" class="form-control"></select>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="confirmNewBatter()">Send to Crease</button>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/scoring.js"></script>
+</body>
+</html>

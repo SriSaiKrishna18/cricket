@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Create a new corridor cricket match">
+    <title>New Match — Corridor Cricket 🏏</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><span class="brand-icon">🏏</span><span>Corridor Cricket</span></a>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+        <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="/new-match" class="active">New Match</a></li>
+            <li><a href="/history">History</a></li>
+            <li><a href="/leaderboard">Leaderboard</a></li>
+            <li><a href="/stats">Stats</a></li>
+        </ul>
+    </nav>
+
+    <main class="main-content page-enter">
+        <div class="page-header">
+            <h1>🏏 New Match</h1>
+            <p>Set up teams, toss, and get going!</p>
+        </div>
+
+        <!-- Step 1: Match Details -->
+        <div id="step-1" class="card mb-lg">
+            <h3 class="mb-md">Match Details</h3>
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label for="team-a-name">Team A Name</label>
+                    <input type="text" id="team-a-name" class="form-control" placeholder="e.g., Corridor Kings" value="Team A" maxlength="25">
+                </div>
+                <div class="form-group">
+                    <label for="team-b-name">Team B Name</label>
+                    <input type="text" id="team-b-name" class="form-control" placeholder="e.g., Hallway Heroes" value="Team B" maxlength="25">
+                </div>
+            </div>
+            <div class="grid grid-2">
+                <div class="form-group">
+                    <label for="total-overs">Overs per Innings</label>
+                    <select id="total-overs" class="form-control">
+                        <option value="1">1 Over</option>
+                        <option value="2">2 Overs</option>
+                        <option value="3">3 Overs</option>
+                        <option value="4">4 Overs</option>
+                        <option value="5" selected>5 Overs</option>
+                        <option value="6">6 Overs</option>
+                        <option value="8">8 Overs</option>
+                        <option value="10">10 Overs</option>
+                        <option value="15">15 Overs</option>
+                        <option value="20">20 Overs</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="venue">Venue</label>
+                    <input type="text" id="venue" class="form-control" placeholder="e.g., The Corridor" value="The Corridor" maxlength="40">
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Team Selection -->
+        <div id="step-2" class="card mb-lg">
+            <div class="flex items-center justify-between mb-md">
+                <h3>Select Players</h3>
+                <button class="btn btn-sm btn-secondary" onclick="showQuickAddPlayer()">+ Quick Add Player</button>
+            </div>
+
+            <div id="quick-add-area" class="hidden mb-md" style="background: var(--bg-secondary); padding: var(--space-md); border-radius: var(--radius-md);">
+                <div class="flex gap-sm items-center">
+                    <input type="text" id="quick-player-name" class="form-control" placeholder="New player name" style="flex: 1;">
+                    <button class="btn btn-primary btn-sm" onclick="quickAddPlayer()">Add</button>
+                    <button class="btn btn-secondary btn-sm" onclick="hideQuickAddPlayer()">✕</button>
+                </div>
+            </div>
+
+            <div class="grid grid-2">
+                <div>
+                    <h4 class="mb-sm" id="team-a-label">Team A</h4>
+                    <p class="text-sm text-muted mb-md">Click players to add to this team</p>
+                    <div id="team-a-selected" class="flex flex-wrap gap-sm mb-md" style="min-height: 40px; padding: var(--space-sm); border: 2px dashed var(--border-medium); border-radius: var(--radius-md);"></div>
+                </div>
+                <div>
+                    <h4 class="mb-sm" id="team-b-label">Team B</h4>
+                    <p class="text-sm text-muted mb-md">Click players to add to this team</p>
+                    <div id="team-b-selected" class="flex flex-wrap gap-sm mb-md" style="min-height: 40px; padding: var(--space-sm); border: 2px dashed var(--border-medium); border-radius: var(--radius-md);"></div>
+                </div>
+            </div>
+
+            <h4 class="mb-sm mt-lg">Available Players</h4>
+            <div id="available-players" class="flex flex-wrap gap-sm">
+                <div class="loading-spinner"><div class="spinner"></div></div>
+            </div>
+        </div>
+
+        <!-- Step 3: Toss -->
+        <div id="step-3" class="card mb-lg">
+            <h3 class="mb-md">Toss</h3>
+            <div class="text-center">
+                <div class="coin" id="coin" onclick="flipCoin()">🪙</div>
+                <p class="text-muted mb-md" id="toss-instruction">Click the coin to flip!</p>
+                
+                <div id="toss-result" class="hidden">
+                    <div class="form-group" style="max-width: 300px; margin: 0 auto;">
+                        <label for="toss-winner">Toss Winner</label>
+                        <select id="toss-winner" class="form-control">
+                            <option value="">Select winner</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="max-width: 300px; margin: 0 auto;">
+                        <label for="toss-decision">Choose to</label>
+                        <select id="toss-decision" class="form-control">
+                            <option value="bat">🏏 Bat</option>
+                            <option value="bowl">🎯 Bowl</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Create -->
+        <div class="text-center" style="padding: var(--space-lg) 0;">
+            <button class="btn btn-primary btn-lg" id="create-match-btn" onclick="createMatch()">
+                🏏 Create Match & Start Scoring
+            </button>
+            <p class="text-sm text-muted mt-md">You can also just create the match and score later</p>
+        </div>
+    </main>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/new-match.js"></script>
+</body>
+</html>
