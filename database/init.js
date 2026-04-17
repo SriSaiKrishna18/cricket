@@ -2,7 +2,9 @@ const initSqlJs = require('sql.js');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', 'cricket.db');
+// Use persistent disk on Render, or local directory for dev
+const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/data') ? '/data' : path.join(__dirname, '..');
+const DB_PATH = path.join(DATA_DIR, 'cricket.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 let db = null;
