@@ -9,6 +9,8 @@ services:
         value: production
       - key: PORT
         value: 3000
+      - key: RENDER
+        value: "true"
     disk:
       name: cricket-data
       mountPath: /data

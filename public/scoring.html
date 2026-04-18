@@ -300,23 +300,23 @@
         bs.innerHTML = '';
         var bwp = data.bowlingPlayers || [];
         var lastOverBowler = data.lastOverBowlerId;
-        var isNewOver = data.isNewOver;
+        var needBowlerChange = data.isNewOver && lastOverBowler;
         var firstAvailable = null;
         for (var k = 0; k < bwp.length; k++) {
             var o2 = document.createElement('option');
             o2.value = bwp[k].id;
-            // Disable last over's bowler at start of new over
-            if (lastOverBowler && bwp[k].id === lastOverBowler && (data.currentOverBalls || []).length === 0) {
+            // Disable last over's bowler when a new over is starting
+            if (needBowlerChange && bwp[k].id == lastOverBowler) {
                 o2.textContent = bwp[k].name + ' (bowled last over)';
                 o2.disabled = true;
             } else {
                 o2.textContent = bwp[k].name;
-                if (!firstAvailable) firstAvailable = bwp[k].id;
+                if (!firstAvailable) firstAvailable = String(bwp[k].id);
             }
             bs.appendChild(o2);
         }
-        // Auto-select a new bowler if current one was disabled
-        if (curB && !bs.querySelector('option[value="' + curB + '"]:not(:disabled)')) {
+        // Auto-select a different bowler
+        if (needBowlerChange) {
             bs.value = firstAvailable || '';
         } else if (curB) {
             bs.value = curB;

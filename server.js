@@ -57,6 +57,9 @@ process.on('SIGINT', () => {
 
 const PORT = process.env.PORT || 3000;
 
+// Health check endpoint (fast, no DB)
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+
 // Initialize DB then start server
 initDb().then(() => {
     // Register API routes AFTER DB is ready
@@ -68,6 +71,16 @@ initDb().then(() => {
         console.log(`\n🏏 Corridor Cricket is LIVE on http://localhost:${PORT}`);
         console.log(`📊 API available at http://localhost:${PORT}/api`);
         console.log(`🔌 Socket.io ready for live updates\n`);
+
+        // Self-ping to keep Render free tier awake (pings every 14 min)
+        if (process.env.RENDER) {
+            const PING_URL = process.env.RENDER_EXTERNAL_URL || `https://corridor-cricket.onrender.com`;
+            setInterval(() => {
+                const https = require('https');
+                https.get(`${PING_URL}/health`, () => {}).on('error', () => {});
+            }, 14 * 60 * 1000); // 14 minutes
+            console.log('🔄 Self-ping enabled (keeps server awake)');
+        }
     });
 }).catch(err => {
     console.error('Failed to initialize database:', err);
