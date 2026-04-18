@@ -3,9 +3,9 @@ const router = express.Router();
 const { queryAll, queryOne, execute } = require('../database/init');
 
 // GET /api/players
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const players = queryAll('SELECT * FROM players ORDER BY name ASC');
+        const players = await queryAll('SELECT * FROM players ORDER BY name ASC');
         res.json(players);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -13,19 +13,19 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/players
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { name, avatar_color } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ error: 'Player name is required' });
         }
-        const existing = queryOne('SELECT id FROM players WHERE name = ?', [name.trim()]);
+        const existing = await queryOne('SELECT id FROM players WHERE name = ?', [name.trim()]);
         if (existing) {
             return res.status(409).json({ error: 'Player name already exists' });
         }
         const color = avatar_color || `hsl(${Math.floor(Math.random() * 360)}, 55%, 55%)`;
-        const result = execute('INSERT INTO players (name, avatar_color) VALUES (?, ?)', [name.trim(), color]);
-        const player = queryOne('SELECT * FROM players WHERE id = ?', [result.lastInsertRowid]);
+        const result = await execute('INSERT INTO players (name, avatar_color) VALUES (?, ?)', [name.trim(), color]);
+        const player = await queryOne('SELECT * FROM players WHERE id = ?', [result.lastInsertRowid]);
         res.status(201).json(player);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -33,9 +33,9 @@ router.post('/', (req, res) => {
 });
 
 // DELETE /api/players/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        execute('DELETE FROM players WHERE id = ?', [Number(req.params.id)]);
+        await execute('DELETE FROM players WHERE id = ?', [Number(req.params.id)]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -43,14 +43,14 @@ router.delete('/:id', (req, res) => {
 });
 
 // GET /api/players/:id/stats
-router.get('/:id/stats', (req, res) => {
+router.get('/:id/stats', async (req, res) => {
     try {
         const playerId = Number(req.params.id);
-        const player = queryOne('SELECT * FROM players WHERE id = ?', [playerId]);
+        const player = await queryOne('SELECT * FROM players WHERE id = ?', [playerId]);
         if (!player) return res.status(404).json({ error: 'Player not found' });
 
         // Batting stats
-        const battingRows = queryAll('SELECT innings_id, runs_scored, is_wide, is_noball, is_boundary, is_miss FROM deliveries WHERE batter_id = ?', [playerId]);
+        const battingRows = await queryAll('SELECT innings_id, runs_scored, is_wide, is_noball, is_boundary, is_miss FROM deliveries WHERE batter_id = ?', [playerId]);
         
         let totalRuns = 0, ballsFaced = 0, boundaries = 0;
         const inningsMap = {};
@@ -67,11 +67,11 @@ router.get('/:id/stats', (req, res) => {
         const highestScore = inningsIds.length > 0 ? Math.max(...Object.values(inningsMap)) : 0;
         const fifties = Object.values(inningsMap).filter(r => r >= 50).length;
         
-        const timesOut = queryOne('SELECT COUNT(*) as cnt FROM dismissals WHERE batter_id = ?', [playerId]);
+        const timesOut = await queryOne('SELECT COUNT(*) as cnt FROM dismissals WHERE batter_id = ?', [playerId]);
         const dismissals = timesOut ? timesOut.cnt : 0;
 
         // Bowling stats  
-        const bowlingRows = queryAll('SELECT runs_scored, extras_runs, is_wide, is_noball, is_wicket FROM deliveries WHERE bowler_id = ?', [playerId]);
+        const bowlingRows = await queryAll('SELECT runs_scored, extras_runs, is_wide, is_noball, is_wicket FROM deliveries WHERE bowler_id = ?', [playerId]);
         let bowlBalls = 0, runsConceded = 0, wickets = 0, legalBalls = 0;
         bowlingRows.forEach(d => {
             bowlBalls++;
@@ -82,7 +82,7 @@ router.get('/:id/stats', (req, res) => {
 
         // Best bowling
         const bowlingByInnings = {};
-        const bowlingDeliveries = queryAll('SELECT innings_id, runs_scored, extras_runs, is_wicket FROM deliveries WHERE bowler_id = ?', [playerId]);
+        const bowlingDeliveries = await queryAll('SELECT innings_id, runs_scored, extras_runs, is_wicket FROM deliveries WHERE bowler_id = ?', [playerId]);
         bowlingDeliveries.forEach(d => {
             if (!bowlingByInnings[d.innings_id]) bowlingByInnings[d.innings_id] = { wickets: 0, runs: 0 };
             bowlingByInnings[d.innings_id].runs += d.runs_scored + d.extras_runs;
@@ -101,10 +101,10 @@ router.get('/:id/stats', (req, res) => {
         if (bestW === 0) bestBowling = '-';
 
         // Catches
-        const catches = queryOne("SELECT COUNT(*) as cnt FROM dismissals WHERE fielder_id = ? AND dismissal_type = 'caught_one_hand'", [playerId]);
+        const catches = await queryOne("SELECT COUNT(*) as cnt FROM dismissals WHERE fielder_id = ? AND dismissal_type = 'caught_one_hand'", [playerId]);
 
         // Matches
-        const matchesPlayed = queryOne('SELECT COUNT(DISTINCT match_id) as matches FROM match_players WHERE player_id = ?', [playerId]);
+        const matchesPlayed = await queryOne('SELECT COUNT(DISTINCT match_id) as matches FROM match_players WHERE player_id = ?', [playerId]);
 
         const battingAvg = dismissals > 0 ? (totalRuns / dismissals).toFixed(2) : (totalRuns > 0 ? totalRuns.toFixed(2) : '0.00');
         const strikeRate = ballsFaced > 0 ? ((totalRuns / ballsFaced) * 100).toFixed(1) : '0.0';
@@ -143,12 +143,11 @@ router.get('/:id/stats', (req, res) => {
 });
 
 // GET /api/players/:id/recent
-router.get('/:id/recent', (req, res) => {
+router.get('/:id/recent', async (req, res) => {
     try {
         const playerId = Number(req.params.id);
         
-        // Get innings where this player batted
-        const deliveries = queryAll(`
+        const deliveries = await queryAll(`
             SELECT d.innings_id, d.runs_scored, d.is_wide, d.is_noball, d.is_boundary,
                    i.match_id, m.team_a_name, m.team_b_name, m.created_at as match_date
             FROM deliveries d
@@ -178,10 +177,10 @@ router.get('/:id/recent', (req, res) => {
         });
 
         const result = Object.values(inningsMap).slice(0, 10);
-        result.forEach(r => {
-            const dismissed = queryOne('SELECT id FROM dismissals WHERE innings_id = ? AND batter_id = ?', [r.innings_id, playerId]);
+        for (const r of result) {
+            const dismissed = await queryOne('SELECT id FROM dismissals WHERE innings_id = ? AND batter_id = ?', [r.innings_id, playerId]);
             r.is_out = !!dismissed;
-        });
+        }
 
         res.json(result);
     } catch (err) {

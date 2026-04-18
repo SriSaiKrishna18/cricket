@@ -1,21 +1,68 @@
-const initSqlJs = require('sql.js');
+/**
+ * Database Layer — Dual Mode
+ * - LOCAL: Uses sql.js (file-based SQLite)
+ * - PRODUCTION: Uses Turso (hosted SQLite, persistent forever)
+ */
+
 const fs = require('fs');
 const path = require('path');
 
-// Use persistent disk on Render, or local directory for dev
-const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/data') ? '/data' : path.join(__dirname, '..');
-const DB_PATH = path.join(DATA_DIR, 'cricket.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const USE_TURSO = !!(process.env.TURSO_DATABASE_URL);
 
-let db = null;
+let db = null;       // sql.js instance (local)
+let turso = null;    // Turso client (production)
 let SQL = null;
 
+// ═══════════════════════════════════════════
+// Initialization
+// ═══════════════════════════════════════════
+
 async function initDb() {
+    if (USE_TURSO) {
+        return await initTurso();
+    } else {
+        return await initLocal();
+    }
+}
+
+async function initTurso() {
+    const { createClient } = require('@libsql/client');
+    turso = createClient({
+        url: process.env.TURSO_DATABASE_URL,
+        authToken: process.env.TURSO_AUTH_TOKEN || undefined
+    });
+
+    // Run schema
+    const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
+    const statements = schema.split(';').map(s => s.trim()).filter(s => s.length > 0);
+    for (const stmt of statements) {
+        await turso.execute(stmt + ';');
+    }
+
+    // Migration: add scorer_token if missing
+    try {
+        const cols = await turso.execute('PRAGMA table_info(matches)');
+        const colNames = cols.rows.map(r => r[1] || r.name);
+        if (!colNames.includes('scorer_token')) {
+            await turso.execute('ALTER TABLE matches ADD COLUMN scorer_token TEXT');
+            console.log('✅ Migration: added scorer_token column');
+        }
+    } catch(e) { /* column already exists */ }
+
+    console.log('✅ Connected to Turso (persistent cloud database)');
+    return turso;
+}
+
+async function initLocal() {
     if (db) return db;
     
+    const initSqlJs = require('sql.js');
     SQL = await initSqlJs();
     
-    // Load existing database or create new one
+    const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/data') ? '/data' : path.join(__dirname, '..');
+    const DB_PATH = path.join(DATA_DIR, 'cricket.db');
+
     if (fs.existsSync(DB_PATH)) {
         const buffer = fs.readFileSync(DB_PATH);
         db = new SQL.Database(buffer);
@@ -25,14 +72,12 @@ async function initDb() {
         console.log('✅ New database created');
     }
 
-    // Enable foreign keys
     db.run('PRAGMA foreign_keys = ON');
 
-    // Run schema
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
     db.run(schema);
 
-    // Migration: add scorer_token if missing
+    // Migration
     try {
         const cols = db.exec('PRAGMA table_info(matches)');
         if (cols.length > 0) {
@@ -42,23 +87,16 @@ async function initDb() {
                 console.log('✅ Migration: added scorer_token column');
             }
         }
-    } catch(e) { /* column already exists */ }
+    } catch(e) {}
 
-    // Save to disk
     saveDb();
-
-    return db;
-}
-
-function getDb() {
-    if (!db) {
-        throw new Error('Database not initialized. Call initDb() first.');
-    }
     return db;
 }
 
 function saveDb() {
-    if (db) {
+    if (!USE_TURSO && db) {
+        const DATA_DIR = process.env.NODE_ENV === 'production' && fs.existsSync('/data') ? '/data' : path.join(__dirname, '..');
+        const DB_PATH = path.join(DATA_DIR, 'cricket.db');
         const data = db.export();
         const buffer = Buffer.from(data);
         fs.writeFileSync(DB_PATH, buffer);
@@ -66,47 +104,89 @@ function saveDb() {
 }
 
 function closeDb() {
-    if (db) {
+    if (!USE_TURSO && db) {
         saveDb();
         db.close();
         db = null;
     }
 }
 
-// Helper: run a query and return all rows as objects
+// ═══════════════════════════════════════════
+// Query Helpers — work with both backends
+// ═══════════════════════════════════════════
+
 function queryAll(sql, params = []) {
-    const d = getDb();
-    const stmt = d.prepare(sql);
-    if (params.length > 0) stmt.bind(params);
-    const results = [];
-    while (stmt.step()) {
-        results.push(stmt.getAsObject());
+    if (USE_TURSO) {
+        // Returns a promise — caller must await
+        return turso.execute({ sql, args: params }).then(result => {
+            return result.rows.map(row => {
+                // Convert row to plain object
+                const obj = {};
+                result.columns.forEach((col, i) => {
+                    obj[col] = row[i] !== undefined ? row[i] : row[col];
+                });
+                return obj;
+            });
+        });
+    } else {
+        const d = db;
+        const stmt = d.prepare(sql);
+        if (params.length > 0) stmt.bind(params);
+        const results = [];
+        while (stmt.step()) {
+            results.push(stmt.getAsObject());
+        }
+        stmt.free();
+        return results;
     }
-    stmt.free();
-    return results;
 }
 
-// Helper: run a query and return the first row as object
 function queryOne(sql, params = []) {
-    const d = getDb();
-    const stmt = d.prepare(sql);
-    if (params.length > 0) stmt.bind(params);
-    let result = null;
-    if (stmt.step()) {
-        result = stmt.getAsObject();
+    if (USE_TURSO) {
+        return turso.execute({ sql, args: params }).then(result => {
+            if (result.rows.length === 0) return null;
+            const row = result.rows[0];
+            const obj = {};
+            result.columns.forEach((col, i) => {
+                obj[col] = row[i] !== undefined ? row[i] : row[col];
+            });
+            return obj;
+        });
+    } else {
+        const d = db;
+        const stmt = d.prepare(sql);
+        if (params.length > 0) stmt.bind(params);
+        let result = null;
+        if (stmt.step()) {
+            result = stmt.getAsObject();
+        }
+        stmt.free();
+        return result;
     }
-    stmt.free();
-    return result;
 }
 
-// Helper: execute a statement (INSERT/UPDATE/DELETE) and return info
 function execute(sql, params = []) {
-    const d = getDb();
-    d.run(sql, params);
-    const lastId = queryOne('SELECT last_insert_rowid() as id');
-    const changes = queryOne('SELECT changes() as cnt');
-    saveDb(); // Persist after every write
-    return { lastInsertRowid: lastId ? lastId.id : 0, changes: changes ? changes.cnt : 0 };
+    if (USE_TURSO) {
+        return turso.execute({ sql, args: params }).then(result => {
+            return {
+                lastInsertRowid: Number(result.lastInsertRowid) || 0,
+                changes: result.rowsAffected || 0
+            };
+        });
+    } else {
+        const d = db;
+        d.run(sql, params);
+        const lastId = queryOne('SELECT last_insert_rowid() as id');
+        const changes = queryOne('SELECT changes() as cnt');
+        saveDb();
+        return { lastInsertRowid: lastId ? lastId.id : 0, changes: changes ? changes.cnt : 0 };
+    }
 }
 
-module.exports = { initDb, getDb, closeDb, saveDb, queryAll, queryOne, execute };
+function getDb() {
+    if (USE_TURSO) return turso;
+    if (!db) throw new Error('Database not initialized');
+    return db;
+}
+
+module.exports = { initDb, getDb, closeDb, saveDb, queryAll, queryOne, execute, USE_TURSO };

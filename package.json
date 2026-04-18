@@ -7,13 +7,19 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "keywords": ["cricket", "scoring", "live", "corridor"],
+  "keywords": [
+    "cricket",
+    "scoring",
+    "live",
+    "corridor"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@libsql/client": "^0.17.2",
+    "cors": "^2.8.5",
     "express": "^4.21.0",
-    "sql.js": "^1.11.0",
     "socket.io": "^4.8.0",
-    "cors": "^2.8.5"
+    "sql.js": "^1.11.0"
   }
 }

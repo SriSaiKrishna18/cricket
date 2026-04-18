@@ -3,13 +3,13 @@ const router = express.Router();
 const { queryAll, queryOne } = require('../database/init');
 
 // GET /api/stats/leaderboard
-router.get('/leaderboard', (req, res) => {
+router.get('/leaderboard', async (req, res) => {
     try {
-        const players = queryAll('SELECT * FROM players');
+        const players = await queryAll('SELECT * FROM players');
         
-        // Build stats for each player
-        const playerStats = players.map(p => {
-            const batDels = queryAll('SELECT runs_scored, is_wide, is_noball, is_boundary FROM deliveries WHERE batter_id = ?', [p.id]);
+        const playerStats = [];
+        for (const p of players) {
+            const batDels = await queryAll('SELECT runs_scored, is_wide, is_noball, is_boundary FROM deliveries WHERE batter_id = ?', [p.id]);
             let totalRuns = 0, ballsFaced = 0, boundaries = 0;
             batDels.forEach(d => {
                 totalRuns += d.runs_scored;
@@ -17,10 +17,10 @@ router.get('/leaderboard', (req, res) => {
                 if (d.is_boundary) boundaries++;
             });
 
-            const timesOut = queryOne('SELECT COUNT(*) as cnt FROM dismissals WHERE batter_id = ?', [p.id]);
+            const timesOut = await queryOne('SELECT COUNT(*) as cnt FROM dismissals WHERE batter_id = ?', [p.id]);
             const dismissals = timesOut ? timesOut.cnt : 0;
 
-            const bowlDels = queryAll('SELECT runs_scored, extras_runs, is_wide, is_noball, is_wicket FROM deliveries WHERE bowler_id = ?', [p.id]);
+            const bowlDels = await queryAll('SELECT runs_scored, extras_runs, is_wide, is_noball, is_wicket FROM deliveries WHERE bowler_id = ?', [p.id]);
             let runsConceded = 0, wickets = 0, legalBalls = 0;
             bowlDels.forEach(d => {
                 runsConceded += d.runs_scored + d.extras_runs;
@@ -28,9 +28,9 @@ router.get('/leaderboard', (req, res) => {
                 if (!d.is_wide && !d.is_noball) legalBalls++;
             });
 
-            const catches = queryOne("SELECT COUNT(*) as cnt FROM dismissals WHERE fielder_id = ? AND dismissal_type = 'caught_one_hand'", [p.id]);
+            const catches = await queryOne("SELECT COUNT(*) as cnt FROM dismissals WHERE fielder_id = ? AND dismissal_type = 'caught_one_hand'", [p.id]);
 
-            return {
+            playerStats.push({
                 id: p.id,
                 name: p.name,
                 avatar_color: p.avatar_color,
@@ -46,8 +46,8 @@ router.get('/leaderboard', (req, res) => {
                 economy: legalBalls > 0 ? ((runsConceded / legalBalls) * 6).toFixed(2) : '0.00',
                 bowling_average: wickets > 0 ? (runsConceded / wickets).toFixed(2) : '-',
                 catches: catches ? catches.cnt : 0
-            };
-        });
+            });
+        }
 
         // Orange Cap
         const orangeCap = [...playerStats].filter(p => p.total_runs > 0).sort((a, b) => b.total_runs - a.total_runs).slice(0, 10);
@@ -74,29 +74,9 @@ router.get('/leaderboard', (req, res) => {
 });
 
 // GET /api/stats/records
-router.get('/records', (req, res) => {
+router.get('/records', async (req, res) => {
     try {
-        // Highest individual scores
-        const allBattingInnings = queryAll(`
-            SELECT d.innings_id, d.batter_id, p.name,
-                   i.innings_number, m.team_a_name, m.team_b_name, m.id as match_id, m.created_at
-            FROM deliveries d
-            JOIN players p ON d.batter_id = p.id
-            JOIN innings i ON d.innings_id = i.id
-            JOIN matches m ON i.match_id = m.id
-            WHERE m.status = 'completed'
-        `);
-        
-        const inningsScores = {};
-        allBattingInnings.forEach(d => {
-            const key = `${d.innings_id}_${d.batter_id}`;
-            if (!inningsScores[key]) {
-                inningsScores[key] = { ...d, runs: 0, balls: 0 };
-            }
-        });
-
-        // Need to recalculate from raw deliveries
-        const completedDeliveries = queryAll(`
+        const completedDeliveries = await queryAll(`
             SELECT d.innings_id, d.batter_id, d.runs_scored, d.is_wide, d.is_noball,
                    p.name, m.team_a_name, m.team_b_name, m.id as match_id, m.created_at
             FROM deliveries d
@@ -124,7 +104,7 @@ router.get('/records', (req, res) => {
         const highestScore = Object.values(scoreMap).sort((a, b) => b.runs - a.runs).slice(0, 5);
 
         // Best bowling
-        const bowlingDels = queryAll(`
+        const bowlingDels = await queryAll(`
             SELECT d.innings_id, d.bowler_id, d.runs_scored, d.extras_runs, d.is_wicket,
                    p.name, m.team_a_name, m.team_b_name, m.id as match_id, m.created_at
             FROM deliveries d
@@ -151,8 +131,7 @@ router.get('/records', (req, res) => {
 
         const bestBowling = Object.values(bowlMap).sort((a, b) => b.wickets - a.wickets || a.runs - b.runs).slice(0, 5);
 
-        // Highest team totals
-        const highestTeamTotals = queryAll(`
+        const highestTeamTotals = await queryAll(`
             SELECT i.total_runs, i.total_wickets, i.total_balls,
                    CASE WHEN i.batting_team = 'A' THEN m.team_a_name ELSE m.team_b_name END as team_name,
                    m.team_a_name, m.team_b_name, m.id as match_id, m.created_at
@@ -161,8 +140,7 @@ router.get('/records', (req, res) => {
             ORDER BY i.total_runs DESC LIMIT 5
         `);
 
-        // Lowest team totals
-        const lowestTeamTotals = queryAll(`
+        const lowestTeamTotals = await queryAll(`
             SELECT i.total_runs, i.total_wickets, i.total_balls,
                    CASE WHEN i.batting_team = 'A' THEN m.team_a_name ELSE m.team_b_name END as team_name,
                    m.team_a_name, m.team_b_name, m.id as match_id, m.created_at
@@ -171,7 +149,7 @@ router.get('/records', (req, res) => {
             ORDER BY i.total_runs ASC LIMIT 5
         `);
 
-        const totalMatches = queryOne("SELECT COUNT(*) as cnt FROM matches WHERE status = 'completed'");
+        const totalMatches = await queryOne("SELECT COUNT(*) as cnt FROM matches WHERE status = 'completed'");
 
         res.json({ highestScore, bestBowling, highestTeamTotals, lowestTeamTotals, totalMatches: totalMatches ? totalMatches.cnt : 0 });
     } catch (err) {
@@ -180,17 +158,16 @@ router.get('/records', (req, res) => {
 });
 
 // GET /api/stats/head-to-head
-router.get('/head-to-head', (req, res) => {
+router.get('/head-to-head', async (req, res) => {
     try {
         const { p1, p2 } = req.query;
         if (!p1 || !p2) return res.status(400).json({ error: 'Two player IDs required' });
 
-        const player1 = queryOne('SELECT * FROM players WHERE id = ?', [Number(p1)]);
-        const player2 = queryOne('SELECT * FROM players WHERE id = ?', [Number(p2)]);
+        const player1 = await queryOne('SELECT * FROM players WHERE id = ?', [Number(p1)]);
+        const player2 = await queryOne('SELECT * FROM players WHERE id = ?', [Number(p2)]);
         if (!player1 || !player2) return res.status(404).json({ error: 'Player not found' });
 
-        // p1 batting vs p2 bowling
-        const p1vs = queryAll('SELECT runs_scored, is_wide, is_noball, is_wicket, is_boundary FROM deliveries WHERE batter_id = ? AND bowler_id = ?', [Number(p1), Number(p2)]);
+        const p1vs = await queryAll('SELECT runs_scored, is_wide, is_noball, is_wicket, is_boundary FROM deliveries WHERE batter_id = ? AND bowler_id = ?', [Number(p1), Number(p2)]);
         let p1Runs = 0, p1Balls = 0, p1Dismissed = 0, p1Boundaries = 0;
         p1vs.forEach(d => {
             p1Runs += d.runs_scored;
@@ -199,8 +176,7 @@ router.get('/head-to-head', (req, res) => {
             if (d.is_boundary) p1Boundaries++;
         });
 
-        // p2 batting vs p1 bowling
-        const p2vs = queryAll('SELECT runs_scored, is_wide, is_noball, is_wicket, is_boundary FROM deliveries WHERE batter_id = ? AND bowler_id = ?', [Number(p2), Number(p1)]);
+        const p2vs = await queryAll('SELECT runs_scored, is_wide, is_noball, is_wicket, is_boundary FROM deliveries WHERE batter_id = ? AND bowler_id = ?', [Number(p2), Number(p1)]);
         let p2Runs = 0, p2Balls = 0, p2Dismissed = 0, p2Boundaries = 0;
         p2vs.forEach(d => {
             p2Runs += d.runs_scored;
@@ -219,33 +195,32 @@ router.get('/head-to-head', (req, res) => {
 });
 
 // GET /api/stats/overview
-router.get('/overview', (req, res) => {
+router.get('/overview', async (req, res) => {
     try {
-        const totalMatches = queryOne("SELECT COUNT(*) as cnt FROM matches WHERE status = 'completed'");
-        const totalPlayers = queryOne('SELECT COUNT(*) as cnt FROM players');
-        const totalRuns = queryOne('SELECT COALESCE(SUM(runs_scored), 0) as cnt FROM deliveries');
-        const totalWickets = queryOne('SELECT COUNT(*) as cnt FROM dismissals');
-        const liveMatch = queryOne("SELECT * FROM matches WHERE status = 'live' ORDER BY started_at DESC LIMIT 1");
+        const totalMatches = await queryOne("SELECT COUNT(*) as cnt FROM matches WHERE status = 'completed'");
+        const totalPlayers = await queryOne('SELECT COUNT(*) as cnt FROM players');
+        const totalRuns = await queryOne('SELECT COALESCE(SUM(runs_scored), 0) as cnt FROM deliveries');
+        const totalWickets = await queryOne('SELECT COUNT(*) as cnt FROM dismissals');
+        const liveMatch = await queryOne("SELECT * FROM matches WHERE status = 'live' ORDER BY started_at DESC LIMIT 1");
 
-        // Top scorer
-        const players = queryAll('SELECT * FROM players');
+        const players = await queryAll('SELECT * FROM players');
         let topScorer = { name: '-', runs: 0 };
         let topWicketTaker = { name: '-', wickets: 0 };
 
-        players.forEach(p => {
-            const runs = queryOne('SELECT COALESCE(SUM(runs_scored), 0) as r FROM deliveries WHERE batter_id = ?', [p.id]);
+        for (const p of players) {
+            const runs = await queryOne('SELECT COALESCE(SUM(runs_scored), 0) as r FROM deliveries WHERE batter_id = ?', [p.id]);
             if (runs && runs.r > topScorer.runs) topScorer = { name: p.name, runs: runs.r };
             
-            const wkts = queryOne('SELECT COUNT(*) as w FROM deliveries WHERE bowler_id = ? AND is_wicket = 1', [p.id]);
+            const wkts = await queryOne('SELECT COUNT(*) as w FROM deliveries WHERE bowler_id = ? AND is_wicket = 1', [p.id]);
             if (wkts && wkts.w > topWicketTaker.wickets) topWicketTaker = { name: p.name, wickets: wkts.w };
-        });
+        }
 
         res.json({
             totalMatches: totalMatches ? totalMatches.cnt : 0,
             totalPlayers: totalPlayers ? totalPlayers.cnt : 0,
             totalRuns: totalRuns ? totalRuns.cnt : 0,
             totalWickets: totalWickets ? totalWickets.cnt : 0,
-            liveMatch,
+            liveMatch: liveMatch ? { ...liveMatch, scorer_token: undefined } : null,
             topScorer,
             topWicketTaker
         });

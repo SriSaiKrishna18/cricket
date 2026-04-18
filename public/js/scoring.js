@@ -41,6 +41,14 @@ async function checkScorerAuth() {
         const res = await fetch(`/api/matches/${matchId}/check-scorer`, {
             headers: token ? { 'X-Scorer-Token': token } : {}
         });
+        
+        if (!res.ok) {
+            // Match might not exist
+            document.getElementById('scoring-loading').classList.add('hidden');
+            showToast('Match not found or server error', 'error');
+            return;
+        }
+        
         const data = await res.json();
         
         if (!data.isScorer) {
@@ -51,7 +59,14 @@ async function checkScorerAuth() {
 
         loadMatchState();
     } catch (err) {
-        showToast('Error checking authorization', 'error');
+        // Network error — still try to load (may be local dev without auth)
+        console.error('Auth check error:', err);
+        document.getElementById('scoring-loading').classList.add('hidden');
+        try {
+            await loadMatchState();
+        } catch(e) {
+            showToast('Cannot connect to server', 'error');
+        }
     }
 }
 
