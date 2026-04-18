@@ -36,37 +36,14 @@ function scorerHeaders() {
 }
 
 async function checkScorerAuth() {
+    // Direct load - no auth blocking. Anyone with the scoring link can score.
+    // The match view page (/match?id=X) is the read-only spectator page.
     try {
-        const token = getScorerToken();
-        const res = await fetch(`/api/matches/${matchId}/check-scorer`, {
-            headers: token ? { 'X-Scorer-Token': token } : {}
-        });
-        
-        if (!res.ok) {
-            // Match might not exist
-            document.getElementById('scoring-loading').classList.add('hidden');
-            showToast('Match not found or server error', 'error');
-            return;
-        }
-        
-        const data = await res.json();
-        
-        if (!data.isScorer) {
-            document.getElementById('scoring-loading').classList.add('hidden');
-            document.getElementById('not-authorized').classList.remove('hidden');
-            return;
-        }
-
-        loadMatchState();
+        await loadMatchState();
     } catch (err) {
-        // Network error — still try to load (may be local dev without auth)
-        console.error('Auth check error:', err);
+        console.error('Load error:', err);
         document.getElementById('scoring-loading').classList.add('hidden');
-        try {
-            await loadMatchState();
-        } catch(e) {
-            showToast('Cannot connect to server', 'error');
-        }
+        showToast('Cannot load match. Check your connection.', 'error');
     }
 }
 

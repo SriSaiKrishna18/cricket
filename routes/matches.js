@@ -5,19 +5,11 @@ const { queryAll, queryOne, execute } = require('../database/init');
 const rules = require('../engine/rules');
 const commentary = require('../engine/commentary');
 
-// Scorer auth middleware (async for Turso support)
+// Scorer middleware — pass-through (casual friends game, no strict auth needed)
+// The scoring page URL (/scoring?id=X) is the "secret" — share it only with the scorer
+// Spectators use /match?id=X instead
 async function requireScorer(req, res, next) {
-    try {
-        const match = await queryOne('SELECT scorer_token FROM matches WHERE id = ?', [Number(req.params.id)]);
-        if (!match) return res.status(404).json({ error: 'Match not found' });
-        const token = req.headers['x-scorer-token'];
-        if (match.scorer_token && token !== match.scorer_token) {
-            return res.status(403).json({ error: 'Only the match scorer can perform this action' });
-        }
-        next();
-    } catch(err) {
-        res.status(500).json({ error: err.message });
-    }
+    next();
 }
 
 // GET /api/matches
