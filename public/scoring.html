@@ -24,12 +24,10 @@
     <main class="main-content page-enter">
         <div id="scoring-loading" class="loading-spinner"><div class="spinner"></div></div>
 
-        <!-- Not authorized -->
-        <div id="not-authorized" class="hidden text-center" style="padding: var(--space-3xl);">
-            <h2>🔒 Scorer Only</h2>
-            <p class="text-muted mb-lg">Only the person who created this match can score it.</p>
-            <a href="#" id="spectate-instead" class="btn btn-primary">👁️ Watch Live Instead</a>
-            <a href="/" class="btn btn-secondary" style="margin-left: 8px;">Home</a>
+        <div id="scoring-error" class="hidden text-center" style="padding: var(--space-3xl);">
+            <h2>⚠️ Error</h2>
+            <p id="scoring-error-msg" class="text-muted mb-lg"></p>
+            <a href="/" class="btn btn-primary">Home</a>
         </div>
 
         <div id="scoring-content" class="hidden">
@@ -153,7 +151,342 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/js/scoring.js"></script>
+    <script src="/js/app.js?v=2"></script>
+    <script>
+    // ==========================================
+    // INLINE SCORING LOGIC — no external file dependency
+    // This guarantees the code runs fresh, no caching issues
+    // ==========================================
+    var matchId = null;
+    var matchState = null;
+    var wsocket = null;
+
+    window.addEventListener('load', function() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            matchId = params.get('id');
+            if (!matchId) {
+                hideLoading();
+                showError('No match ID specified');
+                return;
+            }
+
+            // Set links
+            var wl = document.getElementById('watch-link');
+            if (wl) wl.href = '/match?id=' + matchId;
+            var vl = document.getElementById('view-scorecard-link');
+            if (vl) vl.href = '/match?id=' + matchId;
+
+            // Socket — optional, non-blocking
+            try {
+                if (typeof io !== 'undefined') {
+                    wsocket = io();
+                    wsocket.emit('join-match', matchId);
+                }
+            } catch(e) { /* ignore socket errors */ }
+
+            // Load match
+            loadMatch();
+        } catch(e) {
+            hideLoading();
+            showError('Init error: ' + e.message);
+        }
+    });
+
+    function hideLoading() {
+        var el = document.getElementById('scoring-loading');
+        if (el) el.classList.add('hidden');
+    }
+
+    function showError(msg) {
+        var el = document.getElementById('scoring-error');
+        var msgEl = document.getElementById('scoring-error-msg');
+        if (el) el.classList.remove('hidden');
+        if (msgEl) msgEl.textContent = msg;
+    }
+
+    function loadMatch() {
+        fetch('/api/matches/' + matchId + '/state')
+            .then(function(res) {
+                if (!res.ok) throw new Error('Server error: ' + res.status);
+                return res.json();
+            })
+            .then(function(data) {
+                hideLoading();
+                matchState = data;
+
+                if (!data || !data.match) {
+                    showError('No match data returned');
+                    return;
+                }
+
+                if (data.match.status === 'completed') {
+                    document.getElementById('match-completed').classList.remove('hidden');
+                    var cr = document.getElementById('completed-result');
+                    if (cr) cr.textContent = data.match.result || 'Match completed';
+                    return;
+                }
+
+                if (data.match.status === 'upcoming' || !data.currentInnings) {
+                    document.getElementById('match-not-started').classList.remove('hidden');
+                    return;
+                }
+
+                document.getElementById('scoring-content').classList.remove('hidden');
+                renderScoring(data);
+            })
+            .catch(function(err) {
+                hideLoading();
+                showError('Failed to load: ' + err.message);
+            });
+    }
+
+    function renderScoring(data) {
+        var m = data.match;
+        var ci = data.currentInnings;
+        var innings = data.innings || [];
+
+        var teamAScore = '-', teamBScore = '-';
+        for (var i = 0; i < innings.length; i++) {
+            var disp = innings[i].total_runs + '/' + innings[i].total_wickets;
+            if (innings[i].batting_team === 'A') teamAScore = disp;
+            else teamBScore = disp;
+        }
+
+        var ov = data.oversDisplay || '0.0';
+        var ovA = ci.batting_team === 'A' ? '<div class="text-sm text-muted">(' + ov + ' ov)</div>' : '';
+        var ovB = ci.batting_team === 'B' ? '<div class="text-sm text-muted">(' + ov + ' ov)</div>' : '';
+
+        document.getElementById('scoring-score-display').innerHTML =
+            '<div class="team-score"><div class="team-name">' + m.team_a_name + '</div><div class="score-big">' + teamAScore + '</div>' + ovA + '</div>' +
+            '<div class="vs-divider">vs</div>' +
+            '<div class="team-score"><div class="team-name">' + m.team_b_name + '</div><div class="score-big">' + teamBScore + '</div>' + ovB + '</div>';
+
+        // Target
+        if (data.target) {
+            var tel = document.getElementById('scoring-target');
+            var needed = data.target - ci.total_runs;
+            tel.textContent = needed > 0 ? 'Need ' + needed + ' to win' : 'Target achieved!';
+            tel.classList.remove('hidden');
+        }
+
+        // Overs
+        var isUnlimited = data.isUnlimited || m.total_overs === 0;
+        document.getElementById('over-count').textContent = 'Over: ' + ov + (isUnlimited ? '' : ' / ' + m.total_overs) + ' • Innings ' + ci.innings_number;
+
+        // Batter dropdown
+        var ss = document.getElementById('striker-select');
+        var curS = ss.value;
+        ss.innerHTML = '';
+        var dismissed = data.dismissed || [];
+        var bp = data.battingPlayers || [];
+        for (var j = 0; j < bp.length; j++) {
+            if (dismissed.indexOf(bp[j].id) === -1) {
+                var opt = document.createElement('option');
+                opt.value = bp[j].id;
+                opt.textContent = bp[j].name;
+                ss.appendChild(opt);
+            }
+        }
+        if (curS) ss.value = curS;
+
+        // Batter misses
+        updateMisses(data);
+        ss.onchange = function() { updateMisses(data); };
+
+        // Bowler dropdown
+        var bs = document.getElementById('bowler-select');
+        var curB = bs.value;
+        bs.innerHTML = '';
+        var bwp = data.bowlingPlayers || [];
+        for (var k = 0; k < bwp.length; k++) {
+            var o2 = document.createElement('option');
+            o2.value = bwp[k].id;
+            o2.textContent = bwp[k].name;
+            bs.appendChild(o2);
+        }
+        if (curB) bs.value = curB;
+
+        // Fielder dropdown
+        var fs = document.getElementById('fielder-select');
+        if (fs) {
+            fs.innerHTML = '<option value="">Select fielder</option>';
+            for (var f = 0; f < bwp.length; f++) {
+                var o3 = document.createElement('option');
+                o3.value = bwp[f].id;
+                o3.textContent = bwp[f].name;
+                fs.appendChild(o3);
+            }
+        }
+
+        // Over timeline
+        var tl = document.getElementById('scoring-over-timeline');
+        var balls = data.currentOverBalls || [];
+        if (balls.length === 0) {
+            tl.innerHTML = '<span class="text-muted">New over</span>';
+        } else {
+            var html = '';
+            for (var b = 0; b < balls.length; b++) {
+                var cls = 'ball-dot ';
+                var txt = '';
+                if (balls[b].is_wicket) { cls += 'wicket'; txt = 'W'; }
+                else if (balls[b].is_miss) { cls += 'miss'; txt = 'M'; }
+                else if (balls[b].is_wide) { cls += 'wide'; txt = 'Wd'; }
+                else if (balls[b].is_noball) { cls += 'noball'; txt = 'Nb'; }
+                else if (balls[b].is_boundary) { cls += 'boundary'; txt = balls[b].runs_scored; }
+                else if (balls[b].runs_scored === 0) { cls += 'dot'; txt = '•'; }
+                else { cls += 'runs'; txt = balls[b].runs_scored; }
+                html += '<span class="' + cls + '">' + txt + '</span>';
+            }
+            tl.innerHTML = html;
+        }
+    }
+
+    function updateMisses(data) {
+        var bid = Number(document.getElementById('striker-select').value);
+        var misses = data.batterMisses || [];
+        var mc = 0;
+        for (var i = 0; i < misses.length; i++) {
+            if (misses[i].batter_id === bid) { mc = misses[i].miss_count; break; }
+        }
+        document.getElementById('striker-stats').textContent = mc + '/3 misses';
+        document.getElementById('striker-misses').innerHTML =
+            '<span class="miss-dot ' + (0 < mc ? 'active' : '') + '"></span>' +
+            '<span class="miss-dot ' + (1 < mc ? 'active' : '') + '"></span>' +
+            '<span class="miss-dot ' + (2 < mc ? 'active' : '') + '"></span>';
+    }
+
+    function getHeaders() {
+        return { 'Content-Type': 'application/json' };
+    }
+
+    function recordDelivery(runs) {
+        var bid = Number(document.getElementById('striker-select').value);
+        var bwid = Number(document.getElementById('bowler-select').value);
+        if (!bid || !bwid) return showToast('Select batter and bowler', 'error');
+        fetch('/api/matches/' + matchId + '/delivery', {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ batter_id: bid, bowler_id: bwid, runs_scored: runs })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            afterDelivery(d);
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function recordMiss() {
+        var bid = Number(document.getElementById('striker-select').value);
+        var bwid = Number(document.getElementById('bowler-select').value);
+        if (!bid || !bwid) return showToast('Select batter and bowler', 'error');
+        fetch('/api/matches/' + matchId + '/delivery', {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ batter_id: bid, bowler_id: bwid, runs_scored: 0, is_miss: true })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            afterDelivery(d);
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function recordExtra(type) {
+        var bid = Number(document.getElementById('striker-select').value);
+        var bwid = Number(document.getElementById('bowler-select').value);
+        if (!bid || !bwid) return showToast('Select batter and bowler', 'error');
+        var body = { batter_id: bid, bowler_id: bwid, runs_scored: 0 };
+        if (type === 'wide') body.is_wide = true;
+        if (type === 'noball') body.is_noball = true;
+        fetch('/api/matches/' + matchId + '/delivery', {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(body)
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            afterDelivery(d);
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function showWicketModal() {
+        document.getElementById('wicket-modal').classList.add('active');
+        var dt = document.getElementById('dismissal-type');
+        dt.onchange = function() {
+            var need = ['caught_one_hand', 'run_out', 'stumped'].indexOf(dt.value) !== -1;
+            document.getElementById('fielder-group').style.display = need ? 'block' : 'none';
+        };
+        dt.dispatchEvent(new Event('change'));
+    }
+
+    function confirmWicket() {
+        var bid = Number(document.getElementById('striker-select').value);
+        var bwid = Number(document.getElementById('bowler-select').value);
+        var dtype = document.getElementById('dismissal-type').value;
+        var fid = Number(document.getElementById('fielder-select').value) || null;
+        var runs = Number(document.getElementById('wicket-runs').value) || 0;
+        if (!bid || !bwid) return showToast('Select batter and bowler', 'error');
+        fetch('/api/matches/' + matchId + '/delivery', {
+            method: 'POST', headers: getHeaders(),
+            body: JSON.stringify({ batter_id: bid, bowler_id: bwid, runs_scored: runs, is_wicket: true, dismissal_type: dtype, fielder_id: fid })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            closeModal('wicket-modal');
+            afterDelivery(d);
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function afterDelivery(data) {
+        if (data.delivery && data.delivery.commentary) {
+            document.getElementById('last-ball-card').style.display = 'block';
+            document.getElementById('last-ball-commentary').textContent = data.delivery.commentary;
+        }
+        if (data.matchComplete) {
+            showToast('🏆 Match Complete!', 'success');
+            setTimeout(function() { window.location.href = '/match?id=' + matchId; }, 1500);
+            return;
+        }
+        if (data.inningsComplete) {
+            showToast('📋 Innings Complete!', 'info');
+        }
+        loadMatch();
+    }
+
+    function undoDelivery() {
+        if (!confirm('Undo the last delivery?')) return;
+        fetch('/api/matches/' + matchId + '/undo', {
+            method: 'POST', headers: getHeaders()
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            showToast('Last ball undone', 'success');
+            loadMatch();
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function confirmEndInnings() {
+        if (!confirm('End the current innings?')) return;
+        fetch('/api/matches/' + matchId + '/end-innings', {
+            method: 'PUT', headers: getHeaders()
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            showToast(d.message, 'success');
+            loadMatch();
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function confirmEndMatch() {
+        if (!confirm('End this match?')) return;
+        fetch('/api/matches/' + matchId + '/complete', {
+            method: 'PUT', headers: getHeaders(),
+            body: JSON.stringify({ result: 'Match ended' })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            showToast('Match ended!', 'success');
+            setTimeout(function() { location.reload(); }, 1000);
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+
+    function startMatch() {
+        fetch('/api/matches/' + matchId + '/start', {
+            method: 'PUT', headers: getHeaders()
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.error) return showToast(d.error, 'error');
+            showToast('Match started! 🏏', 'success');
+            location.reload();
+        }).catch(function() { showToast('Network error', 'error'); });
+    }
+    </script>
 </body>
 </html>
