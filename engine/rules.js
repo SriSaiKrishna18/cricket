@@ -47,12 +47,12 @@ function formatOvers(totalLegalBalls) {
 
 /**
  * Check if innings is complete
+ * Corridor cricket: every batter bats solo, so ALL batters must be out
+ * (not teamPlayerCount-1 like regular cricket with partnerships)
  */
 function isInningsComplete(innings, matchOvers, teamPlayerCount) {
-    const maxWickets = Math.max(teamPlayerCount - 1, 1);
-    
-    // All out
-    if (innings.total_wickets >= maxWickets) return true;
+    // All out — every batter dismissed (corridor: single batter, no partnerships)
+    if (innings.total_wickets >= teamPlayerCount) return true;
     
     // All overs bowled (0 = unlimited, never complete by overs)
     if (matchOvers > 0) {
@@ -101,7 +101,7 @@ function determineResult(match, innings1, innings2) {
         const totalOvers = match.total_overs * 6;
         const ballsRemaining = totalOvers - innings2.total_balls;
         const teamPlayers = getTeamPlayerCount(match, innings2.batting_team);
-        const wicketsLeft = Math.max(teamPlayers - 1, 1) - innings2.total_wickets;
+        const wicketsLeft = teamPlayers - innings2.total_wickets;
         return `${secondBattingTeamName} won by ${wicketsLeft} wicket${wicketsLeft !== 1 ? 's' : ''}`;
     } else {
         return 'Match Tied!';

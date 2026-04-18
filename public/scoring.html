@@ -294,18 +294,35 @@
         updateMisses(data);
         ss.onchange = function() { updateMisses(data); };
 
-        // Bowler dropdown
+        // Bowler dropdown — enforce bowler change after each over
         var bs = document.getElementById('bowler-select');
         var curB = bs.value;
         bs.innerHTML = '';
         var bwp = data.bowlingPlayers || [];
+        var lastOverBowler = data.lastOverBowlerId;
+        var isNewOver = data.isNewOver;
+        var firstAvailable = null;
         for (var k = 0; k < bwp.length; k++) {
             var o2 = document.createElement('option');
             o2.value = bwp[k].id;
-            o2.textContent = bwp[k].name;
+            // Disable last over's bowler at start of new over
+            if (lastOverBowler && bwp[k].id === lastOverBowler && (data.currentOverBalls || []).length === 0) {
+                o2.textContent = bwp[k].name + ' (bowled last over)';
+                o2.disabled = true;
+            } else {
+                o2.textContent = bwp[k].name;
+                if (!firstAvailable) firstAvailable = bwp[k].id;
+            }
             bs.appendChild(o2);
         }
-        if (curB) bs.value = curB;
+        // Auto-select a new bowler if current one was disabled
+        if (curB && !bs.querySelector('option[value="' + curB + '"]:not(:disabled)')) {
+            bs.value = firstAvailable || '';
+        } else if (curB) {
+            bs.value = curB;
+        } else if (firstAvailable) {
+            bs.value = firstAvailable;
+        }
 
         // Fielder dropdown
         var fs = document.getElementById('fielder-select');

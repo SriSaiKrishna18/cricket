@@ -281,6 +281,15 @@ router.get('/:id/state', async (req, res) => {
         const ballsRemaining = isUnlimited ? null : totalBallsInMatch - currentInnings.total_balls;
         const oversDisplay = isUnlimited ? `${rules.formatOvers(currentInnings.total_balls)} (∞)` : rules.formatOvers(currentInnings.total_balls);
 
+        // Determine if we're at the start of a new over and who bowled last over
+        const ballsInCurrentOver = currentInnings.total_balls % 6;
+        const isNewOver = ballsInCurrentOver === 0 && currentInnings.total_balls > 0;
+        let lastOverBowlerId = null;
+        // At the start of a new over, the last delivery's bowler bowled the previous over
+        if (isNewOver && lastDelivery) {
+            lastOverBowlerId = lastDelivery.bowler_id;
+        }
+
         res.json({
             match: { ...match, scorer_token: undefined },
             innings,
@@ -295,7 +304,9 @@ router.get('/:id/state', async (req, res) => {
             currentRunRate: rules.calculateCRR(currentInnings.total_runs, currentInnings.total_balls),
             requiredRunRate: (target && !isUnlimited) ? rules.calculateRRR(target, currentInnings.total_runs, ballsRemaining) : null,
             oversDisplay,
-            isUnlimited
+            isUnlimited,
+            isNewOver,
+            lastOverBowlerId
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
